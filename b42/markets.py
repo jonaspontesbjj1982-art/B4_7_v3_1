@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from .integrity import check_market_integrity
+from .quotes import validate_quote
 from .types import Market, MarketOutcome
 
 
@@ -13,6 +15,7 @@ class RankedOpportunity:
     implied_probability: float
     fair_market_probability: float
     rank_score: float = 0.0
+    status: str = "VALID"
 
 
 def validate_market(market: Market) -> None:
@@ -25,12 +28,11 @@ def validate_market(market: Market) -> None:
         )
 
     for outcome in market.outcomes:
-        if not outcome.outcome.strip():
-            raise ValueError("Desfecho não pode estar vazio.")
+        result = validate_quote(outcome)
 
-        if outcome.odd <= 1.0:
+        if not result.valid:
             raise ValueError(
-                f"Odd inválida: {outcome.odd}"
+                "; ".join(result.errors)
             )
 
 
@@ -40,9 +42,20 @@ def fair_market_probabilities(
     if not outcomes:
         return {}
 
+    valid_outcomes = []
+
+    for outcome in outcomes:
+        result = validate_quote(outcome)
+
+        if result.valid:
+            valid_outcomes.append(outcome)
+
+    if not valid_outcomes:
+        return {}
+
     inverse = {
         outcome.outcome: 1.0 / outcome.odd
-        for outcome in outcomes
+        for outcome in valid_outcomes
     }
 
     total = sum(inverse.values())
@@ -58,7 +71,16 @@ def fair_market_probabilities(
 
 def scan_market(
     market: Market,
+    expected_outcomes: list[str] | None = None,
 ) -> list[RankedOpportunity]:
+    integrity = check_market_integrity(
+        market,
+        expected_outcomes=expected_outcomes,
+    )
+
+    if integrity.status != "VALID":
+        return []
+
     validate_market(market)
 
     fair_probs = fair_market_probabilities(
@@ -68,6 +90,11 @@ def scan_market(
     opportunities = []
 
     for outcome in market.outcomes:
+        validation = validate_quote(outcome)
+
+        if not validation.valid:
+            continue
+
         implied = 1.0 / outcome.odd
         fair = fair_probs[outcome.outcome]
 
@@ -80,6 +107,7 @@ def scan_market(
                 bookmaker=outcome.bookmaker,
                 implied_probability=implied,
                 fair_market_probability=fair,
+                status=validation.status,
             )
         )
 
