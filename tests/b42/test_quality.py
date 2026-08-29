@@ -186,3 +186,148 @@ def test_temporal_score_all_maximum_is_100():
     result = calculate_temporal_score(100, 100, 100)
 
     assert result.score == 100
+
+
+def test_integrated_qi_uses_structural_and_temporal_scores():
+    from b42.quality import calculate_integrated_qi
+
+    result = calculate_integrated_qi(
+        data_quality=80,
+        relevance=80,
+        freshness=80,
+        consistency=80,
+        long_term=100,
+        medium_term=50,
+        short_term=0,
+    )
+
+    # Estrutural = 80
+    # Temporal = 65
+    # Integrado = 80 * 0.80 + 65 * 0.20 = 77
+    assert result.score == 77
+    assert result.classification == "NORMAL"
+
+
+def test_integrated_qi_can_use_full_structural_weight():
+    from b42.quality import calculate_integrated_qi
+
+    result = calculate_integrated_qi(
+        data_quality=90,
+        relevance=90,
+        freshness=90,
+        consistency=90,
+        long_term=0,
+        medium_term=0,
+        short_term=0,
+        temporal_weight=0,
+    )
+
+    assert result.score == 90
+    assert result.classification == "PREMIUM"
+
+
+def test_integrated_qi_can_use_full_temporal_weight():
+    from b42.quality import calculate_integrated_qi
+
+    result = calculate_integrated_qi(
+        data_quality=0,
+        relevance=0,
+        freshness=0,
+        consistency=0,
+        long_term=100,
+        medium_term=100,
+        short_term=100,
+        temporal_weight=1,
+    )
+
+    assert result.score == 100
+    assert result.classification == "PREMIUM"
+
+
+def test_integrated_qi_rejects_invalid_temporal_weight():
+    from b42.quality import calculate_integrated_qi
+
+    with pytest.raises(ValueError):
+        calculate_integrated_qi(
+            80, 80, 80, 80,
+            80, 80, 80,
+            temporal_weight=1.1,
+        )
+
+
+def test_integrated_qi_rejects_negative_temporal_weight():
+    from b42.quality import calculate_integrated_qi
+
+    with pytest.raises(ValueError):
+        calculate_integrated_qi(
+            80, 80, 80, 80,
+            80, 80, 80,
+            temporal_weight=-0.1,
+        )
+
+
+def test_integrated_qi_preserves_qi_classification_boundaries():
+    from b42.quality import calculate_integrated_qi
+
+    result = calculate_integrated_qi(
+        65, 65, 65, 65,
+        65, 65, 65,
+    )
+
+    assert result.score == 65
+    assert result.classification == "BORDERLINE"
+
+
+def test_sample_quality_score_insufficient():
+    from b42.quality import sample_quality_score
+
+    assert sample_quality_score(9) == 0
+
+
+def test_sample_quality_score_limited():
+    from b42.quality import sample_quality_score
+
+    assert sample_quality_score(10) == 50
+    assert sample_quality_score(29) == 50
+
+
+def test_sample_quality_score_adequate():
+    from b42.quality import sample_quality_score
+
+    assert sample_quality_score(30) == 100
+    assert sample_quality_score(100) == 100
+
+
+def test_sample_quality_score_can_be_configured():
+    from b42.quality import sample_quality_score
+
+    result = sample_quality_score(
+        15,
+        insufficient_score=20,
+        limited_score=60,
+        adequate_score=90,
+    )
+
+    assert result == 60
+
+
+def test_sample_quality_score_rejects_invalid_scores():
+    from b42.quality import sample_quality_score
+
+    with pytest.raises(ValueError):
+        sample_quality_score(30, insufficient_score=-1)
+
+    with pytest.raises(ValueError):
+        sample_quality_score(30, limited_score=101)
+
+    with pytest.raises(ValueError):
+        sample_quality_score(30, adequate_score=101)
+
+
+def test_sample_quality_score_respects_original_sample_boundaries():
+    from b42.quality import sample_quality_score
+
+    assert sample_quality_score(9, 10, 20, 30) == 10
+    assert sample_quality_score(10, 10, 20, 30) == 20
+    assert sample_quality_score(29, 10, 20, 30) == 20
+    assert sample_quality_score(30, 10, 20, 30) == 30

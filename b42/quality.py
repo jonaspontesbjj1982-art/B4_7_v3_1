@@ -153,3 +153,76 @@ def calculate_temporal_score(
         medium_term=medium_term,
         short_term=short_term,
     )
+
+
+def calculate_integrated_qi(
+    data_quality: float,
+    relevance: float,
+    freshness: float,
+    consistency: float,
+    long_term: float,
+    medium_term: float,
+    short_term: float,
+    temporal_weight: float = 0.20,
+) -> QIAssessment:
+    if temporal_weight < 0 or temporal_weight > 1:
+        raise ValueError(
+            "Peso temporal deve estar entre 0 e 1."
+        )
+
+    structural_weight = 1.0 - temporal_weight
+
+    structural = calculate_qi(
+        data_quality=data_quality,
+        relevance=relevance,
+        freshness=freshness,
+        consistency=consistency,
+    )
+
+    temporal = calculate_temporal_score(
+        long_term=long_term,
+        medium_term=medium_term,
+        short_term=short_term,
+    )
+
+    score = (
+        structural.score * structural_weight
+        + temporal.score * temporal_weight
+    )
+
+    return QIAssessment(
+        score=score,
+        classification=classify_qi(score),
+    )
+
+
+def sample_quality_score(
+    size: int,
+    insufficient_score: float = 0.0,
+    limited_score: float = 50.0,
+    adequate_score: float = 100.0,
+) -> float:
+    if insufficient_score < 0 or insufficient_score > 100:
+        raise ValueError(
+            "Score insuficiente deve estar entre 0 e 100."
+        )
+
+    if limited_score < 0 or limited_score > 100:
+        raise ValueError(
+            "Score limitado deve estar entre 0 e 100."
+        )
+
+    if adequate_score < 0 or adequate_score > 100:
+        raise ValueError(
+            "Score adequado deve estar entre 0 e 100."
+        )
+
+    assessment = assess_sample(size)
+
+    if assessment.classification == "INSUFFICIENT":
+        return insufficient_score
+
+    if assessment.classification == "LIMITED":
+        return limited_score
+
+    return adequate_score

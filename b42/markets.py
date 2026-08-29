@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from .integrity import check_market_integrity
+from .model import fair_probability_from_odds
 from .quotes import validate_quote
 from .types import Market, MarketOutcome
 
@@ -53,19 +54,16 @@ def fair_market_probabilities(
     if not valid_outcomes:
         return {}
 
-    inverse = {
-        outcome.outcome: 1.0 / outcome.odd
-        for outcome in valid_outcomes
-    }
-
-    total = sum(inverse.values())
-
-    if total <= 0:
-        raise ValueError("Soma das probabilidades inválida.")
+    probabilities = fair_probability_from_odds(
+        [outcome.odd for outcome in valid_outcomes]
+    )
 
     return {
-        name: value / total
-        for name, value in inverse.items()
+        outcome.outcome: probability
+        for outcome, probability in zip(
+            valid_outcomes,
+            probabilities,
+        )
     }
 
 
